@@ -1,5 +1,6 @@
 use core::fmt::Debug;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 use super::Opcode;
 
@@ -83,6 +84,19 @@ impl Instruction {
     /// Returns if the instruction is a jump instruction.
     pub fn is_jump_instruction(&self) -> bool {
         matches!(self.opcode, Opcode::JAL | Opcode::JALR)
+    }
+
+    /// Returns accessed registers for trace
+    pub fn access_regs(&self) -> HashSet<u32> {
+        let mut regs: HashSet<u32> = HashSet::new();
+        regs.insert(self.op_a);
+        if !(self.imm_b || self.opcode == Opcode::AUIPC) {
+            regs.insert(self.op_b);
+        }
+        if !self.imm_c {
+            regs.insert(self.op_c);
+        }
+        regs
     }
 }
 

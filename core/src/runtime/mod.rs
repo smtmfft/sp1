@@ -11,6 +11,7 @@ mod syscall;
 mod utils;
 
 pub use instruction::*;
+use itertools::Itertools;
 pub use memory::*;
 pub use opcode::*;
 pub use program::*;
@@ -22,6 +23,7 @@ pub use utils::*;
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::BufWriter;
 use std::io::Write;
@@ -83,6 +85,30 @@ pub struct Runtime {
     pub max_syscall_cycles: u32,
 
     pub emit_events: bool,
+
+    /// save the last N instructions
+    pub last_instructions: InstructionFiFo<1>,
+}
+
+pub struct InstructionFiFo<const N: usize> {
+    fifo: VecDeque<Instruction>,
+}
+
+impl<const N: usize> InstructionFiFo<N> {
+    pub fn push(&mut self, instruction: Instruction) {
+        self.fifo.push_back(instruction);
+        if self.fifo.len() > N {
+            self.fifo.pop_front();
+        }
+    }
+
+    pub fn pop(&mut self) -> Option<Instruction> {
+        self.fifo.pop_front()
+    }
+
+    pub fn last(&self) -> Option<Instruction> {
+        self.fifo.back().cloned()
+    }
 }
 
 impl Runtime {
@@ -131,6 +157,9 @@ impl Runtime {
             syscall_map,
             emit_events: true,
             max_syscall_cycles,
+            last_instructions: InstructionFiFo {
+                fifo: VecDeque::new(),
+            },
         }
     }
 
@@ -864,6 +893,9 @@ impl Runtime {
             self.state.current_shard += 1;
             self.state.clk = 0;
         }
+
+        // save last instruction
+        self.last_instructions.push(instruction.clone());
 
         self.state.pc.wrapping_sub(self.program.pc_base)
             >= (self.program.instructions.len() * 4) as u32

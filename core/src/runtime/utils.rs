@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{collections::HashSet, io::Write};
 
 use super::{Instruction, Runtime};
 use crate::runtime::Register;
@@ -39,33 +39,35 @@ impl Runtime {
                 buf.write_all(&u32::to_be_bytes(self.state.pc)).unwrap();
             }
         }
+        let width = 12;
+        let prev_dirty_regs = self
+            .last_instructions
+            .last()
+            .map(|ins| ins.access_regs())
+            .unwrap_or_default();
+        let curr_dirty_regs = instruction.access_regs();
+        let regs_status: String = curr_dirty_regs
+            .iter()
+            .chain(prev_dirty_regs.iter())
+            .collect::<HashSet<&u32>>()
+            .iter()
+            .map(|reg| {
+                format!(
+                    "x{}={:<width$} ",
+                    reg,
+                    self.register(Register::from_u32(**reg))
+                )
+            })
+            .collect::<Vec<String>>()
+            .join(" | ");
 
         // If RUST_LOG is set to "trace", then log the current state of the runtime every cycle.
-        let width = 12;
         log::trace!(
-            "clk={} [pc=0x{:x?}] {:<width$?} |         x0={:<width$} x1={:<width$} x2={:<width$} x3={:<width$} x4={:<width$} x5={:<width$} x6={:<width$} x7={:<width$} x8={:<width$} x9={:<width$} x10={:<width$} x11={:<width$} x12={:<width$} x13={:<width$} x14={:<width$} x15={:<width$} x16={:<width$} x17={:<width$} x18={:<width$}",
+            "clk={} [pc=0x{:x?}] {:<width$?} |  {:?}",
             self.state.global_clk,
             self.state.pc,
             instruction,
-            self.register(Register::X0),
-            self.register(Register::X1),
-            self.register(Register::X2),
-            self.register(Register::X3),
-            self.register(Register::X4),
-            self.register(Register::X5),
-            self.register(Register::X6),
-            self.register(Register::X7),
-            self.register(Register::X8),
-            self.register(Register::X9),
-            self.register(Register::X10),
-            self.register(Register::X11),
-            self.register(Register::X12),
-            self.register(Register::X13),
-            self.register(Register::X14),
-            self.register(Register::X15),
-            self.register(Register::X16),
-            self.register(Register::X17),
-            self.register(Register::X18),
+            regs_status
         );
 
         if !self.unconstrained && self.state.global_clk % 10_000_000 == 0 {
